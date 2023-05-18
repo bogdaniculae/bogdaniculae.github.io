@@ -40,6 +40,22 @@ export default class Game {
         instance.update()
 
         window.addEventListener('resize', instance.resize)
+
+        keyboardJS.bind('up', () => {
+            instance.objectsToUpdate[0].body.position.z += -0.25
+        })
+
+        keyboardJS.bind('down', () => {
+            instance.objectsToUpdate[0].body.position.z += 0.25
+        })
+
+        keyboardJS.bind('left', () => {
+            instance.objectsToUpdate[0].body.position.x += -0.25
+        })
+
+        keyboardJS.bind('right', () => {
+            instance.objectsToUpdate[0].body.position.x += 0.25
+        })
     }
 
     generateSquareMaze(dimension) {
@@ -205,6 +221,8 @@ export default class Game {
         instance.walls = instance.generateWalls(maze)
         instance.floor = instance.generateFloor(mazeSize)
 
+        console.log(instance.ball);
+
     }
 
     render() {
@@ -240,8 +258,9 @@ export default class Game {
     }
 
     update() {
-
         instance.updatePhysicsWorld()
+
+
 
         instance.renderer.render(instance.scene, instance.camera);
         // Call animate on next frame

@@ -1,3 +1,4 @@
+import '../keyboard.min.js'
 import * as THREE from "three"
 import * as CANNON from 'cannon'
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';

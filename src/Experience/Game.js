@@ -9,7 +9,10 @@ let instance,
     maze,
     mazeSize = 11,
     ballRadius = 0.25,
-    keyAxis = [0, 0]
+    keys = [],
+    keyAxis = [0, 0],
+    dt = 1 / 60,
+    gameState
 
 export default class Game {
     constructor(canvas) {
@@ -28,40 +31,42 @@ export default class Game {
             floor: 'concrete.png',
         }
 
-        instance.world()
-        instance.scene()
-        instance.debug()
+        gameState = 'initialize';
+
         instance.render()
         instance.update()
 
         window.addEventListener('resize', instance.resize)
-        window.addEventListener('keydown', instance.onKeyDown)
 
-        console.log(instance.ballBody);
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true
+
+            if (e.code === 'KeyS') {
+                gameState = 'fade-in'
+                console.log(gameState);
+            }
+        })
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false
+        })
+
     }
 
-    onMoveKey(axis) {
-        keyAxis = axis.slice(0)
-    }
+    controls() {
+        if (keys['ArrowUp']) {
+            keyAxis[1] = -1
+        }
 
-    onKeyDown(e) {
+        if (keys['ArrowDown']) {
+            keyAxis[1] = 1
+        }
 
-        switch (e.code) {
-            case 'ArrowUp':
-                instance.ballBody.position.z -= 0.05
-                break;
+        if (keys['ArrowLeft']) {
+            keyAxis[0] = -1
+        }
 
-            case 'ArrowDown':
-                instance.ballBody.position.z += 0.05
-                break;
-
-            case 'ArrowLeft':
-                instance.ballBody.position.x -= 0.05
-                break;
-
-            case 'ArrowRight':
-                instance.ballBody.position.x += 0.05
-                break;
+        if (keys['ArrowRight']) {
+            keyAxis[0] = 1
         }
 
     }
@@ -70,7 +75,9 @@ export default class Game {
         const geometries = []
 
         // Physics maze
-        const body = new CANNON.Body({ mass: 0 })
+        const body = new CANNON.Body({
+            type: CANNON.Body.STATIC
+        })
 
         for (let r = 0; r < size.dimension; r++) {
             for (let c = 0; c < size.dimension; c++) {
@@ -97,8 +104,6 @@ export default class Game {
         body.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0)
         instance.world.addBody(body)
 
-        // return mesh
-
     }
 
     generateFloor(size) {
@@ -117,7 +122,7 @@ export default class Game {
         // Physics plane
         const shape = new CANNON.Plane()
         const body = new CANNON.Body({
-            mass: 0,
+            type: CANNON.Body.STATIC,
             shape
         })
         body.position.copy(mesh.position)
@@ -137,25 +142,42 @@ export default class Game {
         instance.ballMesh = mesh
 
         // // Cannon js
-        const shape = new CANNON.Box(new CANNON.Vec3(radius, radius, radius))
+        const shape = new CANNON.Sphere(radius)
+        // const shape = new CANNON.Box(new CANNON.Vec3(radius, radius, radius))
         const body = new CANNON.Body({
             mass: 1,
-            shape
+            // type: CANNON.Body.KINEMATIC,
+            shape,
+            linearDamping: 0.9,
+            fixedRotation: true
         })
+        body.updateMassProperties()
         body.position.copy(position)
-        instance.world.addBody(body)
 
+        instance.world.addBody(body)
         instance.ballBody = body
     }
 
-    world() {
+    victoryBox(position) {
+        const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
+        const body = new CANNON.Body({
+            shape,
+            isTrigger: true
+        })
+        body.position.copy(position)
+
+        instance.world.addBody(body)
+        instance.triggerVictory = body
+    }
+
+    createWorld() {
         instance.world = new CANNON.World()
         instance.world.broadphase = new CANNON.SAPBroadphase(instance.world)
-        instance.world.allowSleep = true
+        // instance.world.allowSleep = true
         instance.world.gravity = new CANNON.Vec3(0, -9.82, 0)
     }
 
-    scene() {
+    createScene() {
         instance.scene = new THREE.Scene();
 
         instance.light = new THREE.PointLight(0xffffff, 1); // soft white light
@@ -166,9 +188,10 @@ export default class Game {
         instance.camera.position.set(1, 5, -1)
         instance.camera.rotation.x = -Math.PI * 0.5
 
-        instance.generateBall(ballRadius, { x: 1, y: ballRadius * 5, z: -1 })
+        instance.generateBall(ballRadius, { x: 1, y: ballRadius, z: -1 })
         instance.generateWalls(maze)
         instance.generateFloor(mazeSize)
+        instance.victoryBox({ x: mazeSize, y: 0.5, z: -mazeSize + 2 })
     }
 
     render() {
@@ -196,16 +219,20 @@ export default class Game {
     debug() {
         instance.cannonDebugger = new CannonDebugger(instance.scene, instance.world, {
             // options...
+            scale: 1
         })
     }
 
     updateWorld() {
-
         instance.ballMesh.position.copy(instance.ballBody.position)
+        instance.ballMesh.quaternion.copy(instance.ballBody.quaternion)
 
-        let friction = instance.ballBody.velocity
+        // Apply force
+        instance.controls()
 
-        // console.log(friction);
+        instance.ballBody.position.x += keyAxis[0] * dt * 2
+        instance.ballBody.position.z += keyAxis[1] * dt * 2
+        keyAxis = [0, 0]
 
         // Run the simulation independently of framerate every 1 / 60 ms
         instance.world.fixedStep()
@@ -226,18 +253,76 @@ export default class Game {
         instance.renderer.render(instance.scene, instance.camera);
     }
 
+    checkForVictory(event) {
+
+        if (event.body === instance.ballBody) {
+            console.log('win is triggered!', event);
+            mazeSize += 2
+            gameState = 'fade-out'
+        }
+
+    }
+
     update() {
+
+        switch (gameState) {
+            case 'initialize':
+
+                maze = generateSquareMaze(mazeSize)
+                maze[mazeSize - 1][mazeSize - 2] = false
+
+                instance.createWorld()
+                instance.createScene()
+                // instance.debug()
+
+                instance.light.intensity = 0
+                document.querySelector('.instructions').style.opacity = 1
+
+                const level = Math.floor((mazeSize - 1) / 2 - 4);
+                document.querySelector('#level').innerHTML = 'Level ' + level;
+
+                break;
+
+            case 'fade-in':
+                instance.light.intensity += 0.1 * (1.0 - instance.light.intensity)
+                instance.updateRender()
+                document.querySelector('.instructions').style.opacity = 0
+
+                if (Math.abs(instance.light.intensity - 1.0) < 0.05) {
+                    instance.light.intensity = 1.0;
+                    gameState = 'play'
+                }
+
+                break;
+
+            case 'play':
+                instance.updateWorld()
+                instance.updateScene()
+
+                // instance.cannonDebugger.update()
+                instance.updateRender()
+
+                instance.triggerVictory.addEventListener('collide', instance.checkForVictory)
+
+                break;
+
+            case 'fade-out':
+                instance.updateWorld()
+                instance.updateScene()
+                instance.light.intensity += 0.1 * (0.0 - instance.light.intensity);
+                instance.updateRender()
+
+                if (Math.abs(instance.light.intensity - 0.0) < 0.1) {
+                    instance.light.intensity = 0.0;
+                    instance.updateRender()
+                    gameState = 'initialize'
+                }
+
+                break;
+        }
+
         requestAnimationFrame(instance.update);
 
-        // world stepping...
-        instance.updateWorld()
-
-        // debug update
-        instance.cannonDebugger.update()
-
-        // three.js render...
-        instance.updateScene()
-        instance.updateRender()
     }
 }
 
@@ -285,5 +370,4 @@ const generateSquareMaze = (dimension) => {
 
 }
 
-maze = generateSquareMaze(mazeSize)
-maze[mazeSize - 1][mazeSize - 2] = false
+

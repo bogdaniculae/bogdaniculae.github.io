@@ -3,16 +3,17 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import * as CANNON from 'cannon-es'
 import CannonDebugger from 'cannon-es-debugger'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 let instance,
     maze,
-    mazeSize = 11,
+    mazeSize = 15,
     ballRadius = 0.25,
     keys = [],
     keyAxis = [0, 0],
     dt = 1 / 60,
-    gameState
+    gameState,
+    speed = 3
 
 export default class Game {
     constructor(canvas) {
@@ -28,7 +29,7 @@ export default class Game {
         instance.textures = {
             ball: 'ball.png',
             wall: 'brick.png',
-            floor: 'concrete.png',
+            floor: 'C_Down_v2.png',
         }
 
         gameState = 'initialize';
@@ -40,19 +41,21 @@ export default class Game {
 
         window.addEventListener('keydown', (e) => {
             keys[e.code] = true
-
-            if (e.code === 'KeyS') {
-                gameState = 'fade-in'
-                console.log(gameState);
-            }
         })
         window.addEventListener('keyup', (e) => {
             keys[e.code] = false
+        })
+        window.addEventListener('click', (e) => {
+
+            if (gameState == 'initialize' || e.target.classList.contains('button'))
+                gameState = 'fade-in'
+
         })
 
     }
 
     controls() {
+
         if (keys['ArrowUp']) {
             keyAxis[1] = -1
         }
@@ -76,7 +79,8 @@ export default class Game {
 
         // Physics maze
         const body = new CANNON.Body({
-            type: CANNON.Body.STATIC
+            // type: CANNON.Body.STATIC
+            mass: 0
         })
 
         for (let r = 0; r < size.dimension; r++) {
@@ -96,6 +100,7 @@ export default class Game {
         // Mesh
         const newGeometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
         const texture = new THREE.TextureLoader().load(instance.textures.wall)
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping
         const material = new THREE.MeshStandardMaterial({ map: texture, wireframe: false })
         const mesh = new THREE.Mesh(newGeometry, material)
         mesh.rotation.x = -Math.PI * 0.5
@@ -108,10 +113,10 @@ export default class Game {
 
     generateFloor(size) {
         // Mesh plane
-        const geometry = new THREE.PlaneGeometry(size * 5, size * 5, size, size)
+        const geometry = new THREE.PlaneGeometry(size * 10, size * 10, size, size)
         const texture = new THREE.TextureLoader().load(instance.textures.floor)
         texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-        texture.repeat.set(size * 5, size * 5)
+        // texture.repeat.set(size * 5, size * 5)
 
         const material = new THREE.MeshStandardMaterial({ map: texture })
         const mesh = new THREE.Mesh(geometry, material)
@@ -122,7 +127,8 @@ export default class Game {
         // Physics plane
         const shape = new CANNON.Plane()
         const body = new CANNON.Body({
-            type: CANNON.Body.STATIC,
+            // type: CANNON.Body.STATIC,
+            mass: 0,
             shape
         })
         body.position.copy(mesh.position)
@@ -143,13 +149,13 @@ export default class Game {
 
         // // Cannon js
         const shape = new CANNON.Sphere(radius)
-        // const shape = new CANNON.Box(new CANNON.Vec3(radius, radius, radius))
         const body = new CANNON.Body({
             mass: 1,
-            // type: CANNON.Body.KINEMATIC,
+            type: CANNON.Body.DYNAMIC,
+            sleepState: false,
             shape,
-            linearDamping: 0.9,
-            fixedRotation: true
+            angularDamping: 1,
+            linearDamping: 0.5,
         })
         body.updateMassProperties()
         body.position.copy(position)
@@ -159,7 +165,15 @@ export default class Game {
     }
 
     victoryBox(position) {
-        const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
+
+        const geometry = new THREE.BoxGeometry(ballRadius, ballRadius, ballRadius)
+        const texture = new THREE.TextureLoader().load(instance.textures.ball)
+        const material = new THREE.MeshStandardMaterial({ map: texture })
+        const mesh = new THREE.Mesh(geometry, material)
+        mesh.position.copy(position)
+        instance.scene.add(mesh)
+
+        const shape = new CANNON.Box(new CANNON.Vec3(ballRadius / 2, ballRadius / 2, ballRadius / 2))
         const body = new CANNON.Body({
             shape,
             isTrigger: true
@@ -173,7 +187,7 @@ export default class Game {
     createWorld() {
         instance.world = new CANNON.World()
         instance.world.broadphase = new CANNON.SAPBroadphase(instance.world)
-        // instance.world.allowSleep = true
+        instance.world.allowSleep = true
         instance.world.gravity = new CANNON.Vec3(0, -9.82, 0)
     }
 
@@ -225,13 +239,14 @@ export default class Game {
 
     updateWorld() {
         instance.ballMesh.position.copy(instance.ballBody.position)
-        instance.ballMesh.quaternion.copy(instance.ballBody.quaternion)
+        // instance.ballMesh.quaternion.copy(instance.ballBody.quaternion)
 
         // Apply force
         instance.controls()
 
-        instance.ballBody.position.x += keyAxis[0] * dt * 2
-        instance.ballBody.position.z += keyAxis[1] * dt * 2
+
+        // instance.ballBody.angularVelocity = new CANNON.Vec3(keyAxis[0] * speed, 0, keyAxis[1] * speed)
+        instance.ballBody.velocity.set(keyAxis[0] * speed, 0, keyAxis[1] * speed)
         keyAxis = [0, 0]
 
         // Run the simulation independently of framerate every 1 / 60 ms
@@ -257,7 +272,7 @@ export default class Game {
 
         if (event.body === instance.ballBody) {
             console.log('win is triggered!', event);
-            mazeSize += 2
+            // mazeSize += 2
             gameState = 'fade-out'
         }
 
@@ -278,7 +293,7 @@ export default class Game {
                 instance.light.intensity = 0
                 document.querySelector('.instructions').style.opacity = 1
 
-                const level = Math.floor((mazeSize - 1) / 2 - 4);
+                const level = Math.floor((mazeSize - 1) / 2 - 6);
                 document.querySelector('#level').innerHTML = 'Level ' + level;
 
                 break;
@@ -287,6 +302,7 @@ export default class Game {
                 instance.light.intensity += 0.1 * (1.0 - instance.light.intensity)
                 instance.updateRender()
                 document.querySelector('.instructions').style.opacity = 0
+                document.querySelector('.level').style.opacity = 0
 
                 if (Math.abs(instance.light.intensity - 1.0) < 0.05) {
                     instance.light.intensity = 1.0;
@@ -315,8 +331,25 @@ export default class Game {
                 if (Math.abs(instance.light.intensity - 0.0) < 0.1) {
                     instance.light.intensity = 0.0;
                     instance.updateRender()
-                    gameState = 'initialize'
+                    gameState = 'congrats'
                 }
+
+                break;
+
+            case 'congrats':
+                maze = generateSquareMaze(mazeSize)
+                maze[mazeSize - 1][mazeSize - 2] = false
+
+                instance.createWorld()
+                instance.createScene()
+                // instance.debug()
+
+                instance.light.intensity = 0
+                document.querySelector('.level').style.opacity = 1
+
+                const lv = 1
+                // document.querySelector('#level').innerHTML = 'Level ' + level;
+                document.querySelector('.level p').innerHTML = 'Level ' + lv + ' complete';
 
                 break;
         }

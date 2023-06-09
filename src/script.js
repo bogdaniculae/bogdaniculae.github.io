@@ -1,9 +1,18 @@
 import * as THREE from "three"
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRAColoader.js'
 
 import * as CANNON from 'cannon-es'
 import CannonDebugger from 'cannon-es-debugger'
+
+const dracoLoader = new DRACOLoader()
+dracoLoader.setDecoderPath('./draco/');
+dracoLoader.preload()
+
+const gltfLoader = new GLTFLoader()
+gltfLoader.setDRACOLoader(dracoLoader)
 
 let scene,
     world,
@@ -38,7 +47,7 @@ let
     axisY = new CANNON.Vec3(0, 1, 0),
     rotationQuaternion = new CANNON.Quaternion(),
     localVelocity = new CANNON.Vec3(),
-    moveDistance = 100
+    moveDistance = 35
 
 class Maze {
     constructor({
@@ -137,7 +146,7 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(0, 5, 10)
+    camera.position.set(0, 1, 1)
 
     // Create Scene
     scene = new THREE.Scene();
@@ -145,6 +154,8 @@ function init() {
 
     initCannon()
     initCannonDebugger()
+
+    // const controls = new OrbitControls()
 
     // Add helpers
     const grid = new THREE.GridHelper(100, 20)
@@ -156,28 +167,19 @@ function init() {
     renderer.setSize(sizes.width, sizes.height);
     document.body.appendChild(renderer.domElement)
 
-    // Optional
-    // controls = new OrbitControls(camera, renderer.domElement)
-    // controls.rotateSpeed = 1.0
-    // controls.zoomSpeed = 1.2
-    // controls.enableDamping = true
-    // controls.enablePan = false
-    // controls.dampingFactor = 0.2
-    // controls.minDistance = 10
-    // controls.maxDistance = 100
-    // controls.enabled = true
-
     // Add light
     addLight()
 
     addGround()
-    addPlayer()
+    addPlayer().catch(error => {
+        console.error(error)
+    })
 
 }
 
 function addLight() {
     light = new THREE.PointLight(0xffffff, 2); // soft white light
-    light.position.set(0, 5, 3)
+    light.position.set(0, 5, 0)
     scene.add(light);
 }
 
@@ -197,29 +199,41 @@ function addGround() {
     scene.add(floor)
 }
 
-function addPlayer() {
-    const halfExtents = new CANNON.Vec3(2, 2, 2)
+function modelLoader(url) {
+    return new Promise((resolve, reject) => {
+        gltfLoader.load(url, data => resolve(data), null, reject)
+    })
+}
+
+async function addPlayer() {
+
+    const gltfData = await modelLoader('GLITCH.gltf')
+
+    player = gltfData.scene
+    player.position.y = 3.5
+    scene.add(player)
+
+    player.add(camera)
+    player.add(light)
+
+    const playerBoundingBox = new THREE.Box3().setFromObject(player)
+    const playerSize = playerBoundingBox.getSize(new THREE.Vector3()).length()
+    const playerCenter = playerBoundingBox.getCenter(new THREE.Vector3())
+
+    const halfExtents = new CANNON.Vec3(playerSize / 2, playerSize / 2, playerSize / 2)
     const playerShape = new CANNON.Box(halfExtents)
     playerBodyMaterial = new CANNON.Material('concrete')
     playerBody = new CANNON.Body({
         mass: 5,
         material: playerBodyMaterial,
-        shape: new CANNON.Sphere(3),
+        shape: new CANNON.Sphere(playerSize / 2),
         linearDamping: 0.5,
         angularDamping: 1,
     })
     playerBody.addShape(playerShape)
-    playerBody.position.set(0, 3.5, 0)
+    playerBody.position.copy(player.position)
     world.addBody(playerBody)
 
-    const playerGeometry = new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2)
-    const playerTexture = new THREE.TextureLoader().load(textures.ball)
-    const playerMaterial = new THREE.MeshStandardMaterial({ map: playerTexture })
-    player = new THREE.Mesh(playerGeometry, playerMaterial)
-    player.position.set(0, 3.5, 0)
-    scene.add(player)
-    player.add(camera)
-    player.add(light)
 }
 
 function initCannon() {
@@ -309,7 +323,10 @@ function animate() {
 
     delta = clock.getDelta()
 
-    movePlayer()
+
+    if (player)
+        movePlayer()
+
     world.fixedStep()
     worldDebugger.update()
 

@@ -1,11 +1,13 @@
 import * as THREE from "three"
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
 import * as CANNON from 'cannon-es'
 import CannonDebugger from 'cannon-es-debugger'
 
 let scene,
     world,
-    worldDebug,
+    worldDebugger,
     controls,
     camera,
     renderer,
@@ -17,8 +19,10 @@ let scene,
     maze,
     floor,
     floorBody,
+    floorBodyMaterial,
     player,
     playerBody,
+    playerBodyMaterial,
     keys,
     gameState
 
@@ -34,7 +38,7 @@ let
     axisY = new CANNON.Vec3(0, 1, 0),
     rotationQuaternion = new CANNON.Quaternion(),
     localVelocity = new CANNON.Vec3(),
-    moveDistance = 35
+    moveDistance = 100
 
 class Maze {
     constructor({
@@ -126,6 +130,7 @@ class Maze {
 }
 
 init()
+events()
 animate()
 
 function init() {
@@ -134,16 +139,14 @@ function init() {
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
     camera.position.set(0, 5, 10)
 
-    // Create World
-    world = new CANNON.World()
-    world.broadphase = new CANNON.SAPBroadphase(world)
-    world.allowSleep = true
-    world.gravity = new CANNON.Vec3(0, -9.82, 0)
-
     // Create Scene
     scene = new THREE.Scene();
     camera.lookAt(scene.position)
 
+    initCannon()
+    initCannonDebugger()
+
+    // Add helpers
     const grid = new THREE.GridHelper(100, 20)
     scene.add(grid);
 
@@ -153,14 +156,35 @@ function init() {
     renderer.setSize(sizes.width, sizes.height);
     document.body.appendChild(renderer.domElement)
 
+    // Optional
+    // controls = new OrbitControls(camera, renderer.domElement)
+    // controls.rotateSpeed = 1.0
+    // controls.zoomSpeed = 1.2
+    // controls.enableDamping = true
+    // controls.enablePan = false
+    // controls.dampingFactor = 0.2
+    // controls.minDistance = 10
+    // controls.maxDistance = 100
+    // controls.enabled = true
+
     // Add light
+    addLight()
+
+    addGround()
+    addPlayer()
+
+}
+
+function addLight() {
     light = new THREE.PointLight(0xffffff, 2); // soft white light
     light.position.set(0, 5, 3)
     scene.add(light);
+}
 
-    //  Add floor
+function addGround() {
     const floorShape = new CANNON.Box(new CANNON.Vec3(50, 50, 1))
-    floorBody = new CANNON.Body({ mass: 0, material: 'slipperyMaterial' })
+    floorBodyMaterial = new CANNON.Material('ground')
+    floorBody = new CANNON.Body({ mass: 0, material: floorBodyMaterial })
     floorBody.addShape(floorShape)
     floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
     world.addBody(floorBody)
@@ -171,33 +195,56 @@ function init() {
     floor = new THREE.Mesh(floorGeometry, floorMaterial)
     floor.rotation.x = -Math.PI / 2
     scene.add(floor)
+}
 
-    // Add player
+function addPlayer() {
     const halfExtents = new CANNON.Vec3(2, 2, 2)
-    const playerBodyMaterial = new CANNON.Material('slipperyMaterial')
     const playerShape = new CANNON.Box(halfExtents)
+    playerBodyMaterial = new CANNON.Material('concrete')
     playerBody = new CANNON.Body({
         mass: 5,
         material: playerBodyMaterial,
-        // shape: new CANNON.Sphere(3),
+        shape: new CANNON.Sphere(3),
         linearDamping: 0.5,
         angularDamping: 1,
     })
     playerBody.addShape(playerShape)
-    playerBody.position.set(0, 4, 0)
+    playerBody.position.set(0, 3.5, 0)
     world.addBody(playerBody)
 
     const playerGeometry = new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2)
     const playerTexture = new THREE.TextureLoader().load(textures.ball)
     const playerMaterial = new THREE.MeshStandardMaterial({ map: playerTexture })
     player = new THREE.Mesh(playerGeometry, playerMaterial)
-    player.position.set(0, 4, 0)
+    player.position.set(0, 3.5, 0)
     scene.add(player)
     player.add(camera)
     player.add(light)
+}
 
-    worldDebug = new CannonDebugger(scene, world)
+function initCannon() {
+    world = new CANNON.World()
+    world.broadphase = new CANNON.SAPBroadphase(world)
+    // world.allowSleep = true
+    world.gravity = new CANNON.Vec3(0, -9.82, 0)
 
+}
+
+function initCannonDebugger() {
+    worldDebugger = new CannonDebugger(scene, world, {
+        onInit(body, mesh) {
+            document.body.addEventListener('keydown', (e) => {
+                if (e.code === "KeyR") {
+                    mesh.visible = !mesh.visible
+                }
+            })
+
+        }
+    })
+
+}
+
+function events() {
     // Events
     window.addEventListener('resize', resize)
 
@@ -209,7 +256,7 @@ function init() {
         a: false,
         s: false,
         d: false,
-        w: false
+        w: false,
     }
 
     document.body.addEventListener('keydown', (e) => {
@@ -221,36 +268,9 @@ function init() {
         const key = e.code.replace('Key', '').toLowerCase()
         if (keys[key] !== undefined) keys[key] = false
     })
-
-    // Optional
-    // controls = new OrbitControls(camera, renderer.domElement)
-
 }
 
-function animate() {
-    requestAnimationFrame(animate)
-
-    updateWorld()
-
-    renderer.render(scene, camera);
-}
-
-function resize() {
-    sizes.width = window.innerWidth
-    sizes.height = window.innerHeight
-
-    camera.aspect = sizes.width / sizes.height
-    camera.updateProjectionMatrix()
-
-    renderer.setSize(sizes.width, sizes.height)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-}
-
-function updateWorld() {
-
-    world.fixedStep()
-
-    delta = clock.getDelta()
+function movePlayer() {
 
     player.position.copy(playerBody.position)
     player.quaternion.copy(playerBody.quaternion)
@@ -270,18 +290,43 @@ function updateWorld() {
         playerBody.quaternion = rotationQuaternion.mult(playerBody.quaternion)
     }
 
+    localVelocity.set(0, 0, moveDistance * 0.2);
+    const worldVelocity = playerBody.quaternion.vmult(localVelocity);
 
-    const forward = new CANNON.Vec3(0, 0, -200)
-    if (keys.arrowup || keys.w) playerBody.applyLocalForce(forward)
+    if (keys.arrowup || keys.w) {
+        playerBody.velocity.x = -worldVelocity.x;
+        playerBody.velocity.z = -worldVelocity.z;
+    }
 
-
-    const backwards = new CANNON.Vec3(0, 0, 200)
-    if (keys.arrowdown || keys.s) playerBody.applyLocalForce(backwards)
-
-
-    worldDebug.update()
-
+    if (keys.arrowdown || keys.s) {
+        playerBody.velocity.x = worldVelocity.x;
+        playerBody.velocity.z = worldVelocity.z;
+    }
 }
+
+function animate() {
+    requestAnimationFrame(animate)
+
+    delta = clock.getDelta()
+
+    movePlayer()
+    world.fixedStep()
+    worldDebugger.update()
+
+    renderer.render(scene, camera);
+}
+
+function resize() {
+    sizes.width = window.innerWidth
+    sizes.height = window.innerHeight
+
+    camera.aspect = sizes.width / sizes.height
+    camera.updateProjectionMatrix()
+
+    renderer.setSize(sizes.width, sizes.height)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+}
+
 
 
 class Game {

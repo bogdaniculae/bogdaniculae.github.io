@@ -57,7 +57,7 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(0, 5, 1)
+    camera.position.set(0, 4, 1)
 
     // Create Scene
     scene = new THREE.Scene();
@@ -207,23 +207,23 @@ async function addPlayer() {
     player.position.y = 3.5
     scene.add(player)
 
-    player.add(camera)
+    // player.add(camera)
     player.add(light)
 
-    controls.target = player.position
-    controls.update()
+    // controls.target = player.position
+    // controls.update()
 
     const playerBoundingBox = new THREE.Box3().setFromObject(player)
     const playerSize = playerBoundingBox.getSize(new THREE.Vector3()).length()
     const playerCenter = playerBoundingBox.getCenter(new THREE.Vector3())
 
-    const halfExtents = new CANNON.Vec3(playerSize / 2, playerSize / 2, playerSize / 2)
+    const halfExtents = new CANNON.Vec3(playerSize / 4, playerSize / 4, playerSize / 4)
     const playerShape = new CANNON.Box(halfExtents)
     playerBodyMaterial = new CANNON.Material('concrete')
     playerBody = new CANNON.Body({
         mass: 5,
         material: playerBodyMaterial,
-        shape: new CANNON.Sphere(playerSize / 2),
+        // shape: new CANNON.Sphere(playerSize / 2),
         linearDamping: 0.5,
         angularDamping: 1,
     })

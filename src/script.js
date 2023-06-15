@@ -47,96 +47,7 @@ let
     axisY = new CANNON.Vec3(0, 1, 0),
     rotationQuaternion = new CANNON.Quaternion(),
     localVelocity = new CANNON.Vec3(),
-    moveDistance = 35
-
-class Maze {
-    constructor({
-        box = {
-            width,
-            height,
-            depth,
-        }
-    }) {
-        this.box = box
-    }
-
-    generateMaze(dimension) {
-        function iterate(field, x, y) {
-            field[x][y] = false;
-            while (true) {
-                let directions = [];
-                if (x > 1 && field[x - 2][y] == true) {
-                    directions.push([-1, 0]);
-                }
-                if (x < field.dimension - 2 && field[x + 2][y] == true) {
-                    directions.push([1, 0]);
-                }
-                if (y > 1 && field[x][y - 2] == true) {
-                    directions.push([0, -1]);
-                }
-                if (y < field.dimension - 2 && field[x][y + 2] == true) {
-                    directions.push([0, 1]);
-                }
-                if (directions.length == 0) {
-                    return field;
-                }
-                const dir = directions[Math.floor(Math.random() * directions.length)];
-                field[x + dir[0]][y + dir[1]] = false;
-                field = iterate(field, x + dir[0] * 2, y + dir[1] * 2);
-
-            }
-
-        }
-
-        // Initialize the field.
-        let field = new Array(dimension);
-        field.dimension = dimension;
-        for (var i = 0; i < dimension; i++) {
-            field[i] = new Array(dimension);
-            for (var j = 0; j < dimension; j++) {
-                field[i][j] = true;
-            }
-        }
-
-        // Gnerate the maze recursively.
-        field = iterate(field, 1, 1);
-
-        return field;
-    }
-
-    generateWalls(size) {
-        const geometries = []
-
-        const body = new CANNON.Body({
-            mass: 0
-        })
-
-        for (let r = 0; r < size.dimension; r++) {
-            for (let c = 0; c < size.dimension; c++) {
-                if (size[r][c]) {
-                    const geometry = new THREE.BoxGeometry(this.box.width, this.box.height, this.box.depth)
-                    geometry.translate(r, this.box.depth * -0.5 + floor.height * -0.5, c)
-                    geometries.push(geometry)
-
-                    const shape = new CANNON.Box(new CANNON.Vec3(this.box.width * 0.5, this.box.height * 0.5, this.box.depth * 0.5))
-                    body.addShape(shape, new CANNON.Vec3(r, this.box.depth * -0.5 + floor.height * -0.5, c))
-                }
-            }
-        }
-
-        // Mesh
-        const newGeometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
-        const texture = new THREE.TextureLoader().load(textures.wall)
-        texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-        const material = new THREE.MeshStandardMaterial({ map: texture, wireframe: false })
-        const mesh = new THREE.Mesh(newGeometry, material)
-        mesh.rotation.x = -Math.PI / 2
-        scene.add(mesh)
-
-        body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
-        world.addBody(body)
-    }
-}
+    moveDistance = 15
 
 init()
 events()
@@ -146,16 +57,15 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(0, 1, 1)
+    camera.position.set(0, 5, 1)
 
     // Create Scene
     scene = new THREE.Scene();
-    camera.lookAt(scene.position)
+    // camera.lookAt(scene.position)
 
     initCannon()
     initCannonDebugger()
 
-    // const controls = new OrbitControls()
 
     // Add helpers
     const grid = new THREE.GridHelper(100, 20)
@@ -167,14 +77,98 @@ function init() {
     renderer.setSize(sizes.width, sizes.height);
     document.body.appendChild(renderer.domElement)
 
+    controls = new OrbitControls(camera, renderer.domElement)
+
     // Add light
     addLight()
 
     addGround()
+    addMaze()
     addPlayer().catch(error => {
         console.error(error)
     })
 
+}
+
+function generateMaze(dimension) {
+    function iterate(field, x, y) {
+        field[x][y] = false;
+        while (true) {
+            let directions = [];
+            if (x > 1 && field[x - 2][y] == true) {
+                directions.push([-1, 0]);
+            }
+            if (x < field.dimension - 2 && field[x + 2][y] == true) {
+                directions.push([1, 0]);
+            }
+            if (y > 1 && field[x][y - 2] == true) {
+                directions.push([0, -1]);
+            }
+            if (y < field.dimension - 2 && field[x][y + 2] == true) {
+                directions.push([0, 1]);
+            }
+            if (directions.length == 0) {
+                return field;
+            }
+            const dir = directions[Math.floor(Math.random() * directions.length)];
+            field[x + dir[0]][y + dir[1]] = false;
+            field = iterate(field, x + dir[0] * 2, y + dir[1] * 2);
+
+        }
+
+    }
+
+    // Initialize the field.
+    let field = new Array(dimension);
+    field.dimension = dimension;
+    for (var i = 0; i < dimension; i++) {
+        field[i] = new Array(dimension);
+        for (var j = 0; j < dimension; j++) {
+            field[i][j] = true;
+        }
+    }
+
+    // Gnerate the maze recursively.
+    field = iterate(field, 1, 1);
+
+    return field;
+}
+
+function addMaze() {
+
+    const size = generateMaze(15)
+    console.log(size);
+
+    const geometries = []
+
+    const body = new CANNON.Body({
+        mass: 0
+    })
+
+    for (let r = 0; r < size.dimension; r++) {
+        for (let c = 0; c < size.dimension; c++) {
+            if (size[r][c]) {
+                const geometry = new THREE.BoxGeometry(1, 1, 1)
+                geometry.translate(r, 1, c)
+                geometries.push(geometry)
+
+                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, .5))
+                body.addShape(shape, new CANNON.Vec3(r, 1, c))
+            }
+        }
+    }
+
+    // Mesh
+    const newGeometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
+    const texture = new THREE.TextureLoader().load(textures.wall)
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+    const material = new THREE.MeshStandardMaterial({ map: texture, wireframe: false })
+    const mesh = new THREE.Mesh(newGeometry, material)
+    // mesh.rotation.x = -Math.PI / 2
+    scene.add(mesh)
+
+    // body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
+    world.addBody(body)
 }
 
 function addLight() {
@@ -215,6 +209,9 @@ async function addPlayer() {
 
     player.add(camera)
     player.add(light)
+
+    controls.target = player.position
+    controls.update()
 
     const playerBoundingBox = new THREE.Box3().setFromObject(player)
     const playerSize = playerBoundingBox.getSize(new THREE.Vector3()).length()

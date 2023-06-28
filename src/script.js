@@ -52,11 +52,11 @@ const sizes = {
 const labyrinth = [
     [
         [1, 1, 1, 1, 1, 1, 1],
-        [2, 0, 0, 0, 1, 0, 3],
+        [1, 0, 0, 0, 1, 0, 3],
         [1, 1, 1, 0, 1, 0, 1],
-        [1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 1, 1, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1, 0, 2],
+        [1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 0, 0, 1],
         [1, 1, 1, 1, 1, 1, 1],
     ],
     [
@@ -179,6 +179,7 @@ function generateMazeMesh(index) {
 
     const texture = new THREE.TextureLoader().load(textures.wall)
     const geometries = []
+
     const body = new CANNON.Body({ mass: 0 })
 
     labyrinth[index].forEach((row, r) => {
@@ -193,12 +194,28 @@ function generateMazeMesh(index) {
             }
 
             if (cell == 2) {
-                console.log(cell, c);
+                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
+
+                if (c == 0) {
+                    body.addShape(shape, new CANNON.Vec3(c - 1, 0.5, r))
+                }
+
+                if (r == 0) {
+                    body.addShape(shape, new CANNON.Vec3(c, 0.5, r - 1))
+                }
+
+                if (r == row.length - 1) {
+                    body.addShape(shape, new CANNON.Vec3(c, 0.5, r + 1))
+                }
+
+                if (c == row.length - 1) {
+                    body.addShape(shape, new CANNON.Vec3(c + 1, 0.5, r))
+                }
+
                 entrancePos = [c, r]
             }
 
             if (cell == 3) {
-                console.log(cell, c);
                 exitPos = [c, r]
             }
         })

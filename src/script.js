@@ -412,6 +412,8 @@ function events() {
         const key = e.code.replace('Key', '').toLowerCase()
         if (keys[key] !== undefined) keys[key] = false
     })
+
+
 }
 
 function resize() {
@@ -463,8 +465,7 @@ function animate() {
             // Check for victory
             victoryBoxBody.addEventListener('collide', (e) => {
                 if (e.body === playerBody) {
-                    destroy()
-                    document.querySelector('canvas')?.remove()
+
                     gameState = 'fade out'
                 }
             })
@@ -508,6 +509,8 @@ function animate() {
                 }
             })
 
+            destroy()
+            document.querySelector('canvas')?.remove()
 
             break;
 
@@ -515,7 +518,7 @@ function animate() {
 
             nextStep.innerHTML = `
                     <h1>Congratulations. You were able to find all ${gameLevel} boxes </h1>
-                    <code> Press ENTER to continue</code>
+                    <code> Press ENTER to continue OR press ESCAPE to exit</code> 
                     
                 `
             nextStep.style.display = 'flex'
@@ -525,7 +528,19 @@ function animate() {
                     gameLevel = 1
                     gameState = 'initialize'
                 }
+
+                if (e.code === "Escape") {
+                    gameLevel = 1
+                    gameState = 'end game'
+                }
             })
+            break;
+
+
+        case 'end game':
+            nextStep.style.display = 'none'
+            congrats.style.display = 'none'
+
             break;
     }
 

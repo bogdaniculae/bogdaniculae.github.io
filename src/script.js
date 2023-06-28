@@ -30,7 +30,7 @@ let scene,
     exitPos = [],
     keys,
     gameState,
-    gameLevel = 0,
+    gameLevel = 1,
     clock = new THREE.Clock(),
     delta,
     axisY = new CANNON.Vec3(0, 1, 0),
@@ -49,8 +49,8 @@ const sizes = {
     height: window.innerHeight
 }
 
-const labyrinth = {
-    first: [
+const labyrinth = [
+    [
         [1, 1, 1, 1, 1, 1, 1],
         [2, 0, 0, 0, 1, 0, 3],
         [1, 1, 1, 0, 1, 0, 1],
@@ -59,7 +59,44 @@ const labyrinth = {
         [1, 0, 0, 0, 0, 0, 1],
         [1, 1, 1, 1, 1, 1, 1],
     ],
-}
+    [
+        [1, 1, 1, 1, 1, 1, 1],
+        [2, 0, 0, 0, 1, 0, 1],
+        [1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 3],
+        [1, 1, 1, 1, 1, 1, 1],
+    ],
+    [
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 1, 1, 0, 1, 0, 1],
+        [2, 0, 0, 0, 1, 0, 3],
+        [1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+    ],
+    [
+        [1, 1, 1, 2, 1, 1, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 3, 1, 1, 1],
+    ],
+    [
+        [1, 1, 2, 1, 1, 1, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 3],
+        [1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+    ],
+]
+
 
 const level = document.createElement('div')
 level.classList.add('level')
@@ -67,6 +104,11 @@ document.body.appendChild(level)
 
 const congrats = document.createElement('div')
 congrats.classList.add('congrats')
+document.body.appendChild(congrats)
+
+const nextStep = document.createElement('div')
+nextStep.classList.add('continue')
+document.body.appendChild(nextStep)
 
 gameState = 'initialize'
 events()
@@ -76,7 +118,7 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(1, 4, 1)
+    camera.position.set(1, 3.5, 1)
     camera.lookAt(new THREE.Vector3(1, 0, 1))
 
     // Create Scene
@@ -104,7 +146,8 @@ function init() {
     addPlayer()
 
     // Add maze
-    mazeMesh = generateMazeMesh()
+    let mazeIdx = gameLevel - 1
+    mazeMesh = generateMazeMesh(mazeIdx)
     scene.add(mazeMesh)
 
     // Add victory box
@@ -115,7 +158,6 @@ function init() {
 function initCannon() {
     world = new CANNON.World()
     world.broadphase = new CANNON.SAPBroadphase(world)
-    // world.allowSleep = true
     world.gravity = new CANNON.Vec3(0, -9.82, 0)
 
 }
@@ -133,13 +175,13 @@ function initCannonDebugger() {
     })
 }
 
-function generateMazeMesh() {
+function generateMazeMesh(index) {
 
     const texture = new THREE.TextureLoader().load(textures.wall)
     const geometries = []
     const body = new CANNON.Body({ mass: 0 })
 
-    labyrinth.first.forEach((row, r) => {
+    labyrinth[index].forEach((row, r) => {
         row.forEach((cell, c) => {
             if (cell == 1) {
                 const dummy = new THREE.BoxGeometry(1, 1, 1)
@@ -151,10 +193,12 @@ function generateMazeMesh() {
             }
 
             if (cell == 2) {
+                console.log(cell, c);
                 entrancePos = [c, r]
             }
 
             if (cell == 3) {
+                console.log(cell, c);
                 exitPos = [c, r]
             }
         })
@@ -163,7 +207,6 @@ function generateMazeMesh() {
     const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
     const material = new THREE.MeshStandardMaterial({ map: texture })
     const mesh = new THREE.Mesh(geometry, material)
-    mesh.name = 'Maze'
 
     body.position.copy(mesh.position)
     world.addBody(body)
@@ -178,13 +221,36 @@ function addGround() {
 
     const geometry = new THREE.PlaneGeometry(50, 50)
     const texture = new THREE.TextureLoader().load(textures.floor)
-
-    console.log(texture);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(labyrinth[0].length * 5, labyrinth[0].length * 5);
     const material = new THREE.MeshStandardMaterial({ map: texture })
     floorMesh = new THREE.Mesh(geometry, material)
     floorMesh.rotation.x = -Math.PI * 0.5 // make it face up
 
     return floorMesh
+}
+
+function placeWiningBox() {
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+    const material = new THREE.MeshStandardMaterial({ color: '#00ffff' })
+    victoryMesh = new THREE.Mesh(geometry, material)
+
+    victoryMesh.position.x = exitPos[0]
+    victoryMesh.position.z = exitPos[1]
+
+    const boundingBox = new THREE.Box3().setFromObject(victoryMesh)
+    const boxSize = boundingBox.getSize(new THREE.Vector3())
+
+    const shape = new CANNON.Box(new CANNON.Vec3(boxSize.x / 2, boxSize.y / 2, boxSize.z / 2))
+    victoryBoxBody = new CANNON.Body({
+        mass: 0,
+        shape,
+        isTrigger: true
+    })
+    victoryBoxBody.position.copy(victoryMesh.position)
+    world.addBody(victoryBoxBody)
+
+    return victoryMesh
 }
 
 function modelLoader(url) {
@@ -224,29 +290,6 @@ async function addPlayer() {
 
 }
 
-function placeWiningBox() {
-    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
-    const material = new THREE.MeshStandardMaterial({ color: '#00ffff' })
-    victoryMesh = new THREE.Mesh(geometry, material)
-
-    victoryMesh.position.x = exitPos[0]
-    victoryMesh.position.z = exitPos[1]
-
-    const boundingBox = new THREE.Box3().setFromObject(victoryMesh)
-    const boxSize = boundingBox.getSize(new THREE.Vector3())
-
-    const shape = new CANNON.Box(new CANNON.Vec3(boxSize.x / 2, boxSize.y / 2, boxSize.z / 2))
-    victoryBoxBody = new CANNON.Body({
-        mass: 0,
-        shape,
-        isTrigger: true
-    })
-    victoryBoxBody.position.copy(victoryMesh.position)
-    world.addBody(victoryBoxBody)
-
-    return victoryMesh
-}
-
 function updatePlayer() {
 
     playerMesh.position.copy(playerBody.position)
@@ -283,7 +326,7 @@ function update() {
     delta = clock.getDelta()
 
     world.fixedStep()
-    // worldDebugger.update()
+    worldDebugger.update()
 
     if (playerMesh) {
         updatePlayer()
@@ -371,7 +414,10 @@ function animate() {
 
             light.intensity = 0
 
+            congrats.style.display = 'none'
+            nextStep.style.display = 'none'
             level.innerHTML = `Game level - ${gameLevel}`
+
             gameState = 'fade in'
             break;
 
@@ -390,15 +436,12 @@ function animate() {
             break;
 
         case 'play':
-
             // Update the game logic
             update()
 
             // Check for victory
             victoryBoxBody.addEventListener('collide', (e) => {
                 if (e.body === playerBody) {
-                    // do something
-
                     destroy()
                     document.querySelector('canvas')?.remove()
                     gameState = 'fade out'
@@ -418,12 +461,50 @@ function animate() {
             light.intensity += 0.1 * (0.0 - light.intensity);
             if (Math.abs(light.intensity - 0.0) < 0.1) {
                 light.intensity = 0.0;
-                gameLevel += 1
-                gameState = 'initialize'
+
+                if (gameLevel < labyrinth.length) {
+                    gameLevel += 1
+                    gameState = 'congrats'
+                } else {
+                    gameState = 'continue'
+                }
             }
 
             // Render the scene
             renderer.render(scene, camera);
+            break;
+
+        case 'congrats':
+
+            congrats.innerHTML = `
+                    <h1>Well done! You were able to find ${gameLevel - 1} box </h1>
+                    <code> Press ENTER to continue</code>
+                `
+            congrats.style.display = 'flex'
+            document.body.addEventListener('keydown', (e) => {
+                if (e.code === "Enter") {
+                    gameState = 'initialize'
+                }
+            })
+
+
+            break;
+
+        case 'continue':
+
+            nextStep.innerHTML = `
+                    <h1>Congratulations. You were able to find all ${gameLevel} boxes </h1>
+                    <code> Press ENTER to continue</code>
+                    
+                `
+            nextStep.style.display = 'flex'
+
+            document.body.addEventListener('keydown', (e) => {
+                if (e.code === "Enter") {
+                    gameLevel = 1
+                    gameState = 'initialize'
+                }
+            })
             break;
     }
 

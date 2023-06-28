@@ -1,5 +1,5 @@
-*, 
-*::before, 
+*,
+*::before,
 *::after {
   box-sizing: border-box;
 }
@@ -7,7 +7,9 @@
 * {
   margin: 0;
 }
-html, body {
+
+html,
+body {
   height: 100%;
 }
 
@@ -22,8 +24,22 @@ canvas {
   max-width: 100%;
 }
 
+.congrats,
+.continue {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-flow: column nowrap;
+  place-items: center;
+  place-content: center;
+  gap: 1rem;
+
+  color: #fff;
+  background: radial-gradient(rgba(37, 29, 65, .8), rgba(37, 29, 65, 0.01))
+}
+
 .level {
-  position: absolute;
+  position: fixed;
   left: 0px;
   top: 0px;
   padding: 4px;

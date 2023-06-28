@@ -1,6 +1,5 @@
 import * as THREE from "three"
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRAColoader.js'
 
@@ -26,12 +25,15 @@ let scene,
         height: window.innerHeight
     },
     maze,
-    floor,
+    mazeDimension = 6,
+    mazeMesh,
+    floorMesh,
     floorBody,
-    floorBodyMaterial,
-    player,
+    playerMesh,
     playerBody,
-    playerBodyMaterial,
+    victoryMesh,
+    entrancePos = [],
+    exitPos = [],
     keys,
     gameState
 
@@ -49,6 +51,11 @@ let
     localVelocity = new CANNON.Vec3(),
     moveDistance = 15
 
+// New way of generating the maze
+const rows = 2 * mazeDimension + 1
+const cols = 2 * mazeDimension + 1
+const mazeArr = initArray([])
+
 init()
 events()
 animate()
@@ -57,19 +64,14 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(0, 4, 1)
+    camera.position.set(1, 5, 1)
+    camera.lookAt(new THREE.Vector3(1, 0, 1))
 
     // Create Scene
     scene = new THREE.Scene();
-    // camera.lookAt(scene.position)
 
     initCannon()
     initCannonDebugger()
-
-
-    // Add helpers
-    const grid = new THREE.GridHelper(100, 20)
-    scene.add(grid);
 
     // Create Render
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -77,120 +79,213 @@ function init() {
     renderer.setSize(sizes.width, sizes.height);
     document.body.appendChild(renderer.domElement)
 
-    controls = new OrbitControls(camera, renderer.domElement)
 
     // Add light
     addLight()
 
+    // Add floor
     addGround()
-    addMaze()
+
+    // Add maze
+    maze = generateMaze()
+    mazeMesh = generateMazeMesh(maze)
+    scene.add(mazeMesh)
+
+    // Add player
     addPlayer().catch(error => {
         console.error(error)
     })
 
+    placeWiningBox()
+
 }
 
-function generateMaze(dimension) {
-    function iterate(field, x, y) {
-        field[x][y] = false;
-        while (true) {
-            let directions = [];
-            if (x > 1 && field[x - 2][y] == true) {
-                directions.push([-1, 0]);
-            }
-            if (x < field.dimension - 2 && field[x + 2][y] == true) {
-                directions.push([1, 0]);
-            }
-            if (y > 1 && field[x][y - 2] == true) {
-                directions.push([0, -1]);
-            }
-            if (y < field.dimension - 2 && field[x][y + 2] == true) {
-                directions.push([0, 1]);
-            }
-            if (directions.length == 0) {
-                return field;
-            }
-            const dir = directions[Math.floor(Math.random() * directions.length)];
-            field[x + dir[0]][y + dir[1]] = false;
-            field = iterate(field, x + dir[0] * 2, y + dir[1] * 2);
-
-        }
-
-    }
-
-    // Initialize the field.
-    let field = new Array(dimension);
-    field.dimension = dimension;
-    for (var i = 0; i < dimension; i++) {
-        field[i] = new Array(dimension);
-        for (var j = 0; j < dimension; j++) {
-            field[i][j] = true;
-        }
-    }
-
-    // Gnerate the maze recursively.
-    field = iterate(field, 1, 1);
-
-    return field;
+function initArray(val) {
+    return new Array(rows).fill().map(() => new Array(cols).fill(val))
 }
 
-function addMaze() {
+function posToSpace(x) {
+    return 2 * (x - 1) + 1
+}
 
-    const size = generateMaze(15)
-    console.log(size);
+function posToWall(x) {
+    return 2 * x;
+}
 
-    const geometries = []
+function rand(min, max) {
+    return min + Math.floor(Math.random() * (1 + max - min))
+}
 
-    const body = new CANNON.Body({
-        mass: 0
+function shuffle(array) {
+    /* sauce: https://stackoverflow.com/a/12646864 */
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function generateMaze() {
+
+    // place init walls
+    mazeArr.forEach((row, r) => {
+        row.forEach((cell, c) => {
+            switch (r) {
+                case 0:
+                case rows - 1:
+                    mazeArr[r][c] = ["wall"]
+                    break;
+
+                default:
+                    if ((r % 2) == 1) {
+                        if ((c == 0) || (c == cols - 1)) {
+                            mazeArr[r][c] = ["wall"]
+                        }
+                    } else if (c % 2 == 0) {
+                        mazeArr[r][c] = ["wall"]
+                    }
+            }
+        })
+
+        if (r == 0) {
+            // place exit on top row
+            let doorPos = posToSpace(rand(1, mazeDimension))
+            mazeArr[r][doorPos] = ["door", "exit"]
+            exitPos = [r, doorPos]
+        }
+
+        if (r == rows - 1) {
+            // place entrance in bottom row
+            let doorPos = posToSpace(rand(1, mazeDimension))
+            mazeArr[r][doorPos] = ["door", "entrance"]
+            entrancePos = [r, doorPos]
+        }
     })
 
-    for (let r = 0; r < size.dimension; r++) {
-        for (let c = 0; c < size.dimension; c++) {
-            if (size[r][c]) {
-                const geometry = new THREE.BoxGeometry(1, 1, 1)
-                geometry.translate(r, 1, c)
-                geometries.push(geometry)
+    // start partitioning 
+    partition(1, mazeDimension - 1, 1, mazeDimension - 1)
+}
 
-                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, .5))
-                body.addShape(shape, new CANNON.Vec3(r, 1, c))
+function partition(r1, r2, c1, c2) {
+    /* create partition walls
+      ref: https://en.wikipedia.org/wiki/Maze_generation_algorithm#Recursive_division_method */
+
+    let horiz, vert, x, y, start, end
+
+    if ((r2 < r1) || (c2 < c1)) {
+        return false
+    }
+
+    if (r1 == r2) {
+        horiz = r1;
+    } else {
+        x = r1 + 1;
+        y = r2 - 1;
+        start = Math.round(x + (y - x) / 4);
+        end = Math.round(x + 3 * (y - x) / 4);
+        horiz = rand(start, end);
+    }
+
+    if (c1 == c2) {
+        vert = c1;
+    } else {
+        x = c1 + 1;
+        y = c2 - 1;
+        start = Math.round(x + (y - x) / 3);
+        end = Math.round(x + 2 * (y - x) / 3);
+        vert = rand(start, end);
+    }
+
+    for (let i = posToWall(r1) - 1; i <= posToWall(r2) + 1; i++) {
+        for (let j = posToWall(c1) - 1; j <= posToWall(c2) + 1; j++) {
+            if ((i == posToWall(horiz)) || (j == posToWall(vert))) {
+                mazeArr[i][j] = ["wall"];
             }
         }
     }
 
-    // Mesh
-    const newGeometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
-    const texture = new THREE.TextureLoader().load(textures.wall)
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-    const material = new THREE.MeshStandardMaterial({ map: texture, wireframe: false })
-    const mesh = new THREE.Mesh(newGeometry, material)
-    // mesh.rotation.x = -Math.PI / 2
-    scene.add(mesh)
+    let gaps = shuffle([true, true, true, false]);
 
-    // body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
+    /* create gaps in partition walls */
+
+    if (gaps[0]) {
+        let gapPosition = rand(c1, vert);
+        mazeArr[posToWall(horiz)][posToSpace(gapPosition)] = [];
+    }
+
+    if (gaps[1]) {
+        let gapPosition = rand(vert + 1, c2 + 1);
+        mazeArr[posToWall(horiz)][posToSpace(gapPosition)] = [];
+    }
+
+    if (gaps[2]) {
+        let gapPosition = rand(r1, horiz);
+        mazeArr[posToSpace(gapPosition)][posToWall(vert)] = [];
+    }
+
+    if (gaps[3]) {
+        let gapPosition = rand(horiz + 1, r2 + 1);
+        mazeArr[posToSpace(gapPosition)][posToWall(vert)] = [];
+    }
+
+    /* recursively partition newly created chambers */
+
+    partition(r1, horiz - 1, c1, vert - 1);
+    partition(horiz + 1, r2, c1, vert - 1);
+    partition(r1, horiz - 1, vert + 1, c2);
+    partition(horiz + 1, r2, vert + 1, c2);
+
+
+}
+
+function generateMazeMesh() {
+
+    const texture = new THREE.TextureLoader().load(textures.wall)
+    const geometries = []
+    const body = new CANNON.Body({ mass: 0 })
+
+    mazeArr.forEach((row, r) => {
+        row.forEach((cell, c) => {
+            if (cell == 'wall') {
+
+                const dummy = new THREE.BoxGeometry(1, 1, 1)
+                dummy.translate(r, 0.5, c)
+                geometries.push(dummy)
+
+                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
+                body.addShape(shape, new CANNON.Vec3(r, 0.5, c))
+            }
+        })
+    })
+
+    const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
+    const material = new THREE.MeshStandardMaterial({ map: texture })
+    const mesh = new THREE.Mesh(geometry, material)
+
+    body.position.copy(mesh.position)
     world.addBody(body)
+
+    return mesh
 }
 
 function addLight() {
-    light = new THREE.PointLight(0xffffff, 2); // soft white light
-    light.position.set(0, 5, 0)
+    light = new THREE.PointLight(0xffffff); // soft white light
+    light.position.set(0, 1.5, 0)
     scene.add(light);
 }
 
 function addGround() {
-    const floorShape = new CANNON.Box(new CANNON.Vec3(50, 50, 1))
-    floorBodyMaterial = new CANNON.Material('ground')
-    floorBody = new CANNON.Body({ mass: 0, material: floorBodyMaterial })
-    floorBody.addShape(floorShape)
-    floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
+    const floorShape = new CANNON.Plane()
+    floorBody = new CANNON.Body({ mass: 0, shape: floorShape })
+    floorBody.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0) // make it face up
     world.addBody(floorBody)
 
-    const floorGeometry = new THREE.PlaneGeometry(100, 100)
+    const floorGeometry = new THREE.PlaneGeometry(50, 50)
     const floorTexture = new THREE.TextureLoader().load(textures.floor)
     const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture })
-    floor = new THREE.Mesh(floorGeometry, floorMaterial)
-    floor.rotation.x = -Math.PI / 2
-    scene.add(floor)
+    floorMesh = new THREE.Mesh(floorGeometry, floorMaterial)
+    floorMesh.rotation.x = -Math.PI / 2
+    scene.add(floorMesh)
 }
 
 function modelLoader(url) {
@@ -201,36 +296,49 @@ function modelLoader(url) {
 
 async function addPlayer() {
 
-    const gltfData = await modelLoader('GLITCH.gltf')
+    const gltfData = await modelLoader('GLITCH_LowPoly_v03.gltf')
+    const bakedMaterial = new THREE.MeshStandardMaterial({ color: '#00ff00' })
 
-    player = gltfData.scene
-    player.position.y = 3.5
-    scene.add(player)
+    playerMesh = gltfData.scene
 
-    // player.add(camera)
-    player.add(light)
+    playerMesh.traverse((child) => {
+        child.material = bakedMaterial
+    })
 
-    // controls.target = player.position
-    // controls.update()
+    playerMesh.position.x = entrancePos[0]
+    playerMesh.position.y = 0.5
+    playerMesh.position.z = entrancePos[1]
+    scene.add(playerMesh)
 
-    const playerBoundingBox = new THREE.Box3().setFromObject(player)
-    const playerSize = playerBoundingBox.getSize(new THREE.Vector3()).length()
-    const playerCenter = playerBoundingBox.getCenter(new THREE.Vector3())
+    const playerBoundingBox = new THREE.Box3().setFromObject(playerMesh)
+    const playerSize = playerBoundingBox.getSize(new THREE.Vector3())
 
-    const halfExtents = new CANNON.Vec3(playerSize / 4, playerSize / 4, playerSize / 4)
-    const playerShape = new CANNON.Box(halfExtents)
-    playerBodyMaterial = new CANNON.Material('concrete')
+    const player = {
+        width: playerSize.x,
+        height: playerSize.y,
+        depth: playerSize.z,
+    }
+
+    const playerBodyBoundingBox = new CANNON.Sphere(player.width / 2)
     playerBody = new CANNON.Body({
-        mass: 5,
-        material: playerBodyMaterial,
-        // shape: new CANNON.Sphere(playerSize / 2),
-        linearDamping: 0.5,
+        mass: 1,
+        shape: playerBodyBoundingBox,
+        linearDamping: 0.25,
         angularDamping: 1,
     })
-    playerBody.addShape(playerShape)
-    playerBody.position.copy(player.position)
+    playerBody.position.copy(playerMesh.position)
     world.addBody(playerBody)
 
+}
+
+function placeWiningBox() {
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+    const material = new THREE.MeshStandardMaterial({ color: '#00ffff' })
+    victoryMesh = new THREE.Mesh(geometry, material)
+
+    victoryMesh.position.x = exitPos[0]
+    victoryMesh.position.z = exitPos[1]
+    scene.add(victoryMesh)
 }
 
 function initCannon() {
@@ -283,13 +391,16 @@ function events() {
 
 function movePlayer() {
 
-    player.position.copy(playerBody.position)
-    player.quaternion.copy(playerBody.quaternion)
+    playerMesh.position.copy(playerBody.position)
+    playerMesh.quaternion.copy(playerBody.quaternion)
 
-    floor.position.copy(floorBody.position)
-    floor.quaternion.copy(floorBody.quaternion)
+    camera.position.x = playerMesh.position.x
+    camera.position.z = playerMesh.position.z
 
-    const rotateAngle = Math.PI / 2 * delta
+    light.position.x = playerMesh.position.x
+    light.position.z = playerMesh.position.z
+
+    const rotateAngle = Math.PI * delta
 
     if (keys.arrowleft || keys.a) {
         rotationQuaternion.setFromAxisAngle(axisY, rotateAngle)
@@ -320,12 +431,11 @@ function animate() {
 
     delta = clock.getDelta()
 
-
-    if (player)
+    if (playerMesh)
         movePlayer()
 
     world.fixedStep()
-    worldDebugger.update()
+    // worldDebugger.update()
 
     renderer.render(scene, camera);
 }
@@ -340,8 +450,6 @@ function resize() {
     renderer.setSize(sizes.width, sizes.height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 }
-
-
 
 class Game {
 

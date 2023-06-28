@@ -25,22 +25,36 @@ let scene,
         height: window.innerHeight
     },
     maze,
-    mazeDimension = 6,
+    mazeDimension = 5,
     mazeMesh,
     floorMesh,
     floorBody,
     playerMesh,
     playerBody,
     victoryMesh,
+    victoryBoxBody,
     entrancePos = [],
     exitPos = [],
     keys,
-    gameState
+    gameState,
+    gameLevel = 0
 
 const textures = {
     ball: 'ball.png',
     wall: 'brick.png',
     floor: 'concrete.png',
+}
+
+const labyrinth = {
+    first: [
+        [1, 1, 1, 1, 1, 1, 1],
+        [2, 0, 0, 0, 1, 0, 3],
+        [1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1],
+    ],
 }
 
 let
@@ -56,8 +70,14 @@ const rows = 2 * mazeDimension + 1
 const cols = 2 * mazeDimension + 1
 const mazeArr = initArray([])
 
-init()
-events()
+const level = document.createElement('div')
+level.classList.add('level')
+document.body.appendChild(level)
+
+const congrats = document.createElement('div')
+congrats.classList.add('congrats')
+
+gameState = 'initialize'
 animate()
 
 function init() {
@@ -87,17 +107,16 @@ function init() {
     addGround()
 
     // Add maze
-    maze = generateMaze()
-    mazeMesh = generateMazeMesh(maze)
+    // maze = generateMaze()
+    mazeMesh = generateMazeMesh()
     scene.add(mazeMesh)
 
     // Add player
-    addPlayer().catch(error => {
-        console.error(error)
-    })
+    addPlayer()
 
-    placeWiningBox()
-
+    // Add victory box
+    victoryMesh = placeWiningBox()
+    scene.add(victoryMesh)
 }
 
 function initArray(val) {
@@ -123,47 +142,6 @@ function shuffle(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
-}
-
-function generateMaze() {
-
-    // place init walls
-    mazeArr.forEach((row, r) => {
-        row.forEach((cell, c) => {
-            switch (r) {
-                case 0:
-                case rows - 1:
-                    mazeArr[r][c] = ["wall"]
-                    break;
-
-                default:
-                    if ((r % 2) == 1) {
-                        if ((c == 0) || (c == cols - 1)) {
-                            mazeArr[r][c] = ["wall"]
-                        }
-                    } else if (c % 2 == 0) {
-                        mazeArr[r][c] = ["wall"]
-                    }
-            }
-        })
-
-        if (r == 0) {
-            // place exit on top row
-            let doorPos = posToSpace(rand(1, mazeDimension))
-            mazeArr[r][doorPos] = ["door", "exit"]
-            exitPos = [r, doorPos]
-        }
-
-        if (r == rows - 1) {
-            // place entrance in bottom row
-            let doorPos = posToSpace(rand(1, mazeDimension))
-            mazeArr[r][doorPos] = ["door", "entrance"]
-            entrancePos = [r, doorPos]
-        }
-    })
-
-    // start partitioning 
-    partition(1, mazeDimension - 1, 1, mazeDimension - 1)
 }
 
 function partition(r1, r2, c1, c2) {
@@ -238,22 +216,70 @@ function partition(r1, r2, c1, c2) {
 
 }
 
+function generateMaze() {
+
+    // place init walls
+    mazeArr.forEach((row, r) => {
+        row.forEach((cell, c) => {
+            switch (r) {
+                case 0:
+                case rows - 1:
+                    mazeArr[r][c] = ["wall"]
+                    break;
+
+                default:
+                    if ((r % 2) == 1) {
+                        if ((c == 0) || (c == cols - 1)) {
+                            mazeArr[r][c] = ["wall"]
+                        }
+                    } else if (c % 2 == 0) {
+                        mazeArr[r][c] = ["wall"]
+                    }
+            }
+        })
+
+        if (r == 0) {
+            // place exit on top row
+            let doorPos = posToSpace(rand(1, mazeDimension))
+            mazeArr[r][doorPos] = ["door", "entrance"]
+            entrancePos = [r, doorPos]
+        }
+
+        if (r == rows - 1) {
+            // place entrance in bottom row
+            let doorPos = posToSpace(rand(1, mazeDimension))
+            mazeArr[r][doorPos] = ["door", "exit"]
+            exitPos = [r, doorPos]
+        }
+    })
+
+    // start partitioning 
+    partition(1, mazeDimension - 1, 1, mazeDimension - 1)
+}
+
 function generateMazeMesh() {
 
     const texture = new THREE.TextureLoader().load(textures.wall)
     const geometries = []
     const body = new CANNON.Body({ mass: 0 })
 
-    mazeArr.forEach((row, r) => {
+    labyrinth.first.forEach((row, r) => {
         row.forEach((cell, c) => {
-            if (cell == 'wall') {
-
+            if (cell == 1) {
                 const dummy = new THREE.BoxGeometry(1, 1, 1)
-                dummy.translate(r, 0.5, c)
+                dummy.translate(c, 0.5, r)
                 geometries.push(dummy)
 
                 const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
-                body.addShape(shape, new CANNON.Vec3(r, 0.5, c))
+                body.addShape(shape, new CANNON.Vec3(c, 0.5, r))
+            }
+
+            if (cell == 2) {
+                entrancePos = [c, r]
+            }
+
+            if (cell == 3) {
+                exitPos = [c, r]
             }
         })
     })
@@ -261,6 +287,7 @@ function generateMazeMesh() {
     const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
     const material = new THREE.MeshStandardMaterial({ map: texture })
     const mesh = new THREE.Mesh(geometry, material)
+    mesh.name = 'Maze'
 
     body.position.copy(mesh.position)
     world.addBody(body)
@@ -310,16 +337,10 @@ async function addPlayer() {
     playerMesh.position.z = entrancePos[1]
     scene.add(playerMesh)
 
-    const playerBoundingBox = new THREE.Box3().setFromObject(playerMesh)
-    const playerSize = playerBoundingBox.getSize(new THREE.Vector3())
+    const boundingBox = new THREE.Box3().setFromObject(playerMesh)
+    const boxSize = boundingBox.getSize(new THREE.Vector3())
 
-    const player = {
-        width: playerSize.x,
-        height: playerSize.y,
-        depth: playerSize.z,
-    }
-
-    const playerBodyBoundingBox = new CANNON.Sphere(player.width / 2)
+    const playerBodyBoundingBox = new CANNON.Sphere(boxSize.x / 2)
     playerBody = new CANNON.Body({
         mass: 1,
         shape: playerBodyBoundingBox,
@@ -338,7 +359,20 @@ function placeWiningBox() {
 
     victoryMesh.position.x = exitPos[0]
     victoryMesh.position.z = exitPos[1]
-    scene.add(victoryMesh)
+
+    const boundingBox = new THREE.Box3().setFromObject(victoryMesh)
+    const boxSize = boundingBox.getSize(new THREE.Vector3())
+
+    const shape = new CANNON.Box(new CANNON.Vec3(boxSize.x / 2, boxSize.y / 2, boxSize.z / 2))
+    victoryBoxBody = new CANNON.Body({
+        mass: 0,
+        shape,
+        isTrigger: true
+    })
+    victoryBoxBody.position.copy(victoryMesh.position)
+    world.addBody(victoryBoxBody)
+
+    return victoryMesh
 }
 
 function initCannon() {
@@ -360,7 +394,6 @@ function initCannonDebugger() {
 
         }
     })
-
 }
 
 function events() {
@@ -412,7 +445,7 @@ function movePlayer() {
         playerBody.quaternion = rotationQuaternion.mult(playerBody.quaternion)
     }
 
-    localVelocity.set(0, 0, moveDistance * 0.2);
+    localVelocity.set(0, 0, moveDistance * 0.25);
     const worldVelocity = playerBody.quaternion.vmult(localVelocity);
 
     if (keys.arrowup || keys.w) {
@@ -426,18 +459,115 @@ function movePlayer() {
     }
 }
 
-function animate() {
-    requestAnimationFrame(animate)
+function update() {
 
     delta = clock.getDelta()
+
+    // Update game logic here
+    world.fixedStep()
+    // worldDebugger.update()
 
     if (playerMesh)
         movePlayer()
 
-    world.fixedStep()
-    // worldDebugger.update()
+}
 
-    renderer.render(scene, camera);
+function destroy() {
+
+    // Traverse the whole scene
+    scene.traverse((child) => {
+
+        // Test if it's a mesh
+        if (child instanceof THREE.Mesh) {
+            child.geometry.dispose()
+
+            // Loop through the material properties
+            for (const key in child.material) {
+                const value = child.material[key]
+
+                // Test if there is a dispose function
+                if (value && typeof value.dispose === 'function') {
+                    value.dispose()
+                }
+            }
+
+        }
+
+    })
+
+    renderer.dispose()
+
+}
+
+function animate() {
+    // Call animate recursively on each frame
+    requestAnimationFrame(animate)
+
+    switch (gameState) {
+        case 'initialize':
+            init()
+            events()
+
+            light.intensity = 0
+
+            level.innerHTML = `Game level - ${gameLevel}`
+            gameState = 'fade in'
+            break;
+
+        case 'fade in':
+            // Update the game logic
+            update()
+
+            light.intensity += 0.1 * (1.0 - light.intensity);
+            if (Math.abs(light.intensity - 1.0) < 0.05) {
+                light.intensity = 1.0;
+                gameState = 'play'
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+            break;
+
+        case 'play':
+
+            // Update the game logic
+            update()
+
+            // Check for victory
+            victoryBoxBody.addEventListener('collide', (e) => {
+                if (e.body === playerBody) {
+                    // do something
+
+                    destroy()
+                    document.querySelector('canvas')?.remove()
+                    gameState = 'fade out'
+                }
+            })
+
+
+            // Render the scene
+            renderer.render(scene, camera);
+
+            break;
+
+        case 'fade out':
+            // Update the game logic
+            update()
+
+            light.intensity += 0.1 * (0.0 - light.intensity);
+            if (Math.abs(light.intensity - 0.0) < 0.1) {
+                light.intensity = 0.0;
+                gameLevel += 1
+                gameState = 'initialize'
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+            break;
+    }
+
+
+
 }
 
 function resize() {
@@ -450,119 +580,3 @@ function resize() {
     renderer.setSize(sizes.width, sizes.height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 }
-
-class Game {
-
-    victoryBox(position) {
-
-        const geometry = new THREE.BoxGeometry(ballRadius, ballRadius, ballRadius)
-        const texture = new THREE.TextureLoader().load(instance.textures.ball)
-        const material = new THREE.MeshStandardMaterial({ map: texture })
-        const mesh = new THREE.Mesh(geometry, material)
-        mesh.position.copy(position)
-        instance.scene.add(mesh)
-
-        const shape = new CANNON.Box(new CANNON.Vec3(ballRadius / 2, ballRadius / 2, ballRadius / 2))
-        const body = new CANNON.Body({
-            shape,
-            isTrigger: true
-        })
-        body.position.copy(position)
-
-        instance.world.addBody(body)
-        instance.triggerVictory = body
-    }
-
-    checkForVictory(event) {
-
-        if (event.body === instance.ballBody) {
-            console.log('win is triggered!', event);
-            // mazeSize += 2
-            gameState = 'fade-out'
-        }
-
-    }
-
-    update() {
-
-        switch (gameState) {
-            case 'initialize':
-
-                maze = generateSquareMaze(mazeSize)
-                maze[mazeSize - 1][mazeSize - 2] = false
-
-                instance.createWorld()
-                instance.createScene()
-                // instance.debug()
-
-                instance.light.intensity = 0
-                document.querySelector('.instructions').style.opacity = 1
-
-                const level = Math.floor((mazeSize - 1) / 2 - 6);
-                document.querySelector('#level').innerHTML = 'Level ' + level;
-
-                break;
-
-            case 'fade-in':
-                instance.light.intensity += 0.1 * (1.0 - instance.light.intensity)
-                instance.updateRender()
-                document.querySelector('.instructions').style.opacity = 0
-                document.querySelector('.level').style.opacity = 0
-
-                if (Math.abs(instance.light.intensity - 1.0) < 0.05) {
-                    instance.light.intensity = 1.0;
-                    gameState = 'play'
-                }
-
-                break;
-
-            case 'play':
-                instance.updateWorld()
-                instance.updateScene()
-
-                // instance.cannonDebugger.update()
-                instance.updateRender()
-
-                instance.triggerVictory.addEventListener('collide', instance.checkForVictory)
-
-                break;
-
-            case 'fade-out':
-                instance.updateWorld()
-                instance.updateScene()
-                instance.light.intensity += 0.1 * (0.0 - instance.light.intensity);
-                instance.updateRender()
-
-                if (Math.abs(instance.light.intensity - 0.0) < 0.1) {
-                    instance.light.intensity = 0.0;
-                    instance.updateRender()
-                    gameState = 'congrats'
-                }
-
-                break;
-
-            case 'congrats':
-                maze = generateSquareMaze(mazeSize)
-                maze[mazeSize - 1][mazeSize - 2] = false
-
-                instance.createWorld()
-                instance.createScene()
-                // instance.debug()
-
-                instance.light.intensity = 0
-                document.querySelector('.level').style.opacity = 1
-
-                const localVelocity = 1
-                // document.querySelector('#level').innerHTML = 'Level ' + level;
-                document.querySelector('.level p').innerHTML = 'Level ' + localVelocity + ' complete';
-
-                break;
-        }
-
-        requestAnimationFrame(instance.update);
-
-    }
-}
-
-
-

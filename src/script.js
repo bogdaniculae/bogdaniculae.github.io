@@ -19,10 +19,6 @@ let scene,
     camera,
     renderer,
     light,
-    sizes = {
-        width: window.innerWidth,
-        height: window.innerHeight
-    },
     mazeMesh,
     floorMesh,
     floorBody,
@@ -48,6 +44,11 @@ const textures = {
     floor: 'concrete.png',
 }
 
+const sizes = {
+    width: window.innerWidth,
+    height: window.innerHeight
+}
+
 const labyrinth = {
     first: [
         [1, 1, 1, 1, 1, 1, 1],
@@ -59,7 +60,6 @@ const labyrinth = {
         [1, 1, 1, 1, 1, 1, 1],
     ],
 }
-
 
 const level = document.createElement('div')
 level.classList.add('level')
@@ -76,7 +76,7 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(1, 5, 1)
+    camera.position.set(1, 4, 1)
     camera.lookAt(new THREE.Vector3(1, 0, 1))
 
     // Create Scene
@@ -91,20 +91,21 @@ function init() {
     renderer.setSize(sizes.width, sizes.height);
     document.body.appendChild(renderer.domElement)
 
-
     // Add light
-    addLight()
+    light = new THREE.PointLight('#ffffff'); // soft white light
+    light.position.set(0, 1.5, 0)
+    scene.add(light);
 
     // Add floor
-    addGround()
-
-    // Add maze
-    // maze = generateMaze()
-    mazeMesh = generateMazeMesh()
-    scene.add(mazeMesh)
+    floorMesh = addGround()
+    scene.add(floorMesh)
 
     // Add player
     addPlayer()
+
+    // Add maze
+    mazeMesh = generateMazeMesh()
+    scene.add(mazeMesh)
 
     // Add victory box
     victoryMesh = placeWiningBox()
@@ -170,24 +171,20 @@ function generateMazeMesh() {
     return mesh
 }
 
-function addLight() {
-    light = new THREE.PointLight(0xffffff); // soft white light
-    light.position.set(0, 1.5, 0)
-    scene.add(light);
-}
-
 function addGround() {
-    const floorShape = new CANNON.Plane()
-    floorBody = new CANNON.Body({ mass: 0, shape: floorShape })
+    floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() })
     floorBody.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0) // make it face up
     world.addBody(floorBody)
 
-    const floorGeometry = new THREE.PlaneGeometry(50, 50)
-    const floorTexture = new THREE.TextureLoader().load(textures.floor)
-    const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture })
-    floorMesh = new THREE.Mesh(floorGeometry, floorMaterial)
-    floorMesh.rotation.x = -Math.PI / 2
-    scene.add(floorMesh)
+    const geometry = new THREE.PlaneGeometry(50, 50)
+    const texture = new THREE.TextureLoader().load(textures.floor)
+
+    console.log(texture);
+    const material = new THREE.MeshStandardMaterial({ map: texture })
+    floorMesh = new THREE.Mesh(geometry, material)
+    floorMesh.rotation.x = -Math.PI * 0.5 // make it face up
+
+    return floorMesh
 }
 
 function modelLoader(url) {
@@ -250,16 +247,10 @@ function placeWiningBox() {
     return victoryMesh
 }
 
-function movePlayer() {
+function updatePlayer() {
 
     playerMesh.position.copy(playerBody.position)
     playerMesh.quaternion.copy(playerBody.quaternion)
-
-    camera.position.x = playerMesh.position.x
-    camera.position.z = playerMesh.position.z
-
-    light.position.x = playerMesh.position.x
-    light.position.z = playerMesh.position.z
 
     const rotateAngle = Math.PI * delta
 
@@ -288,15 +279,21 @@ function movePlayer() {
 }
 
 function update() {
-
+    // Update game logic here
     delta = clock.getDelta()
 
-    // Update game logic here
     world.fixedStep()
     // worldDebugger.update()
 
-    if (playerMesh)
-        movePlayer()
+    if (playerMesh) {
+        updatePlayer()
+
+        camera.position.x = playerMesh.position.x
+        camera.position.z = playerMesh.position.z
+
+        light.position.x = playerMesh.position.x
+        light.position.z = playerMesh.position.z
+    }
 
 }
 

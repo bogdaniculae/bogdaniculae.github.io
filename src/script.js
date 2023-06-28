@@ -54,8 +54,8 @@ const labyrinth = [
         [1, 1, 1, 1, 1, 1, 1],
         [1, 0, 0, 0, 1, 0, 3],
         [1, 1, 1, 0, 1, 0, 1],
-        [1, 0, 0, 0, 1, 0, 2],
-        [1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 1],
+        [2, 0, 1, 0, 1, 0, 1],
         [1, 0, 1, 0, 0, 0, 1],
         [1, 1, 1, 1, 1, 1, 1],
     ],
@@ -196,18 +196,22 @@ function generateMazeMesh(index) {
             if (cell == 2) {
                 const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
 
+                // If entrance on left
                 if (c == 0) {
                     body.addShape(shape, new CANNON.Vec3(c - 1, 0.5, r))
                 }
 
+                // If entrance on top
                 if (r == 0) {
                     body.addShape(shape, new CANNON.Vec3(c, 0.5, r - 1))
                 }
 
+                // If entrance on bottom
                 if (r == row.length - 1) {
                     body.addShape(shape, new CANNON.Vec3(c, 0.5, r + 1))
                 }
 
+                // If entrance on right
                 if (c == row.length - 1) {
                     body.addShape(shape, new CANNON.Vec3(c + 1, 0.5, r))
                 }
@@ -343,7 +347,7 @@ function update() {
     delta = clock.getDelta()
 
     world.fixedStep()
-    worldDebugger.update()
+    // worldDebugger.update()
 
     if (playerMesh) {
         updatePlayer()

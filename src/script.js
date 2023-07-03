@@ -285,8 +285,9 @@ function modelLoader(url) {
 async function addPlayer() {
 
     const gltfData = await modelLoader('GLITCH_LowPoly_v05.gltf')
-    const texture = new THREE.TextureLoader().load('/glitch_baked.jpg')
+    const texture = new THREE.TextureLoader().load('glitch_baked.jpg')
     texture.flipY = false
+    texture.colorSpace = THREE.SRGBColorSpace
     const material = new THREE.MeshBasicMaterial({ map: texture })
 
     playerMesh = gltfData.scene

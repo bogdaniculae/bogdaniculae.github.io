@@ -19,11 +19,13 @@ let scene,
     camera,
     renderer,
     light,
+    wallSize = 0.5,
     mazeMesh,
     floorMesh,
     floorBody,
     playerMesh,
     playerBody,
+    playerSize,
     victoryMesh,
     victoryBoxBody,
     entrancePos = [],
@@ -52,11 +54,11 @@ const sizes = {
 const labyrinth = [
     [
         [1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 1, 0, 3],
+        [2, 0, 0, 0, 1, 0, 1],
         [1, 1, 1, 0, 1, 0, 1],
         [1, 0, 0, 0, 1, 0, 1],
-        [2, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 3],
         [1, 1, 1, 1, 1, 1, 1],
     ],
     [
@@ -118,7 +120,7 @@ function init() {
 
     // Set camera
     camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-    camera.position.set(1, 3.5, 1)
+    camera.position.set(1, 2, 1)
     camera.lookAt(new THREE.Vector3(1, 0, 1))
 
     // Create Scene
@@ -185,35 +187,35 @@ function generateMazeMesh(index) {
     labyrinth[index].forEach((row, r) => {
         row.forEach((cell, c) => {
             if (cell == 1) {
-                const dummy = new THREE.BoxGeometry(1, 1, 1)
-                dummy.translate(c, 0.5, r)
+                const dummy = new THREE.BoxGeometry(wallSize, wallSize, wallSize)
+                dummy.translate(c * wallSize, wallSize * 0.5, r * wallSize)
                 geometries.push(dummy)
 
-                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
-                body.addShape(shape, new CANNON.Vec3(c, 0.5, r))
+                const shape = new CANNON.Box(new CANNON.Vec3(wallSize * 0.5, wallSize * 0.5, wallSize * 0.5))
+                body.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize))
             }
 
             if (cell == 2) {
-                const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5))
+                const shape = new CANNON.Box(new CANNON.Vec3(wallSize * 0.5, wallSize * 0.5, wallSize * 0.5))
 
                 // If entrance on left
                 if (c == 0) {
-                    body.addShape(shape, new CANNON.Vec3(c - 1, 0.5, r))
+                    body.addShape(shape, new CANNON.Vec3(c * wallSize - wallSize, wallSize * 0.5, r * wallSize))
                 }
 
                 // If entrance on top
                 if (r == 0) {
-                    body.addShape(shape, new CANNON.Vec3(c, 0.5, r - 1))
+                    body.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize - wallSize))
                 }
 
                 // If entrance on bottom
                 if (r == row.length - 1) {
-                    body.addShape(shape, new CANNON.Vec3(c, 0.5, r + 1))
+                    body.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize + wallSize))
                 }
 
                 // If entrance on right
                 if (c == row.length - 1) {
-                    body.addShape(shape, new CANNON.Vec3(c + 1, 0.5, r))
+                    body.addShape(shape, new CANNON.Vec3(c * wallSize + wallSize, wallSize * 0.5, r * wallSize))
                 }
 
                 entrancePos = [c, r]
@@ -252,12 +254,12 @@ function addGround() {
 }
 
 function placeWiningBox() {
-    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+    const geometry = new THREE.BoxGeometry(wallSize * 0.5, wallSize * 0.5, wallSize * 0.5)
     const material = new THREE.MeshStandardMaterial({ color: '#00ffff' })
     victoryMesh = new THREE.Mesh(geometry, material)
 
-    victoryMesh.position.x = exitPos[0]
-    victoryMesh.position.z = exitPos[1]
+    victoryMesh.position.x = exitPos[0] * wallSize
+    victoryMesh.position.z = exitPos[1] * wallSize
 
     const boundingBox = new THREE.Box3().setFromObject(victoryMesh)
     const boxSize = boundingBox.getSize(new THREE.Vector3())
@@ -282,24 +284,27 @@ function modelLoader(url) {
 
 async function addPlayer() {
 
-    const gltfData = await modelLoader('GLITCH_LowPoly_v03.gltf')
-    const bakedMaterial = new THREE.MeshStandardMaterial({ color: '#00ff00' })
+    const gltfData = await modelLoader('GLITCH_LowPoly_v04.gltf')
+    const texture = new THREE.TextureLoader().load('/glitch_baked.jpg')
+    const material = new THREE.MeshBasicMaterial({ map: texture })
 
     playerMesh = gltfData.scene
 
     playerMesh.traverse((child) => {
-        child.material = bakedMaterial
+        child.material = material
     })
 
-    playerMesh.position.x = entrancePos[0]
-    playerMesh.position.y = 0.5
-    playerMesh.position.z = entrancePos[1]
+    playerMesh.position.x = entrancePos[0] * wallSize
+    playerMesh.position.y = wallSize
+    playerMesh.position.z = entrancePos[1] * wallSize
     scene.add(playerMesh)
 
     const boundingBox = new THREE.Box3().setFromObject(playerMesh)
-    const boxSize = boundingBox.getSize(new THREE.Vector3())
+    playerSize = boundingBox.getSize(new THREE.Vector3())
 
-    const playerBodyBoundingBox = new CANNON.Sphere(boxSize.x / 2)
+    console.log(playerSize);
+
+    const playerBodyBoundingBox = new CANNON.Sphere(playerSize.x / 2)
     playerBody = new CANNON.Body({
         mass: 1,
         shape: playerBodyBoundingBox,

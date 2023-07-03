@@ -38,7 +38,7 @@ let scene,
     axisY = new CANNON.Vec3(0, 1, 0),
     rotationQuaternion = new CANNON.Quaternion(),
     localVelocity = new CANNON.Vec3(),
-    moveDistance = 15
+    moveDistance = 10
 
 const textures = {
     ball: 'ball.png',
@@ -284,8 +284,9 @@ function modelLoader(url) {
 
 async function addPlayer() {
 
-    const gltfData = await modelLoader('GLITCH_LowPoly_v04.gltf')
+    const gltfData = await modelLoader('GLITCH_LowPoly_v05.gltf')
     const texture = new THREE.TextureLoader().load('/glitch_baked.jpg')
+    texture.flipY = false
     const material = new THREE.MeshBasicMaterial({ map: texture })
 
     playerMesh = gltfData.scene
@@ -297,12 +298,12 @@ async function addPlayer() {
     playerMesh.position.x = entrancePos[0] * wallSize
     playerMesh.position.y = wallSize
     playerMesh.position.z = entrancePos[1] * wallSize
+    playerMesh.rotation.x = -Math.PI / 3
     scene.add(playerMesh)
 
     const boundingBox = new THREE.Box3().setFromObject(playerMesh)
     playerSize = boundingBox.getSize(new THREE.Vector3())
 
-    console.log(playerSize);
 
     const playerBodyBoundingBox = new CANNON.Sphere(playerSize.x / 2)
     playerBody = new CANNON.Body({
@@ -319,32 +320,29 @@ async function addPlayer() {
 function updatePlayer() {
 
     playerMesh.position.copy(playerBody.position)
-    playerMesh.quaternion.copy(playerBody.quaternion)
+    // playerMesh.quaternion.copy(playerBody.quaternion)
 
-    const rotateAngle = Math.PI * delta
+    localVelocity.set(moveDistance * 0.2, 0, moveDistance * 0.2);
+    const worldVelocity = playerBody.quaternion.vmult(localVelocity);
+
 
     if (keys.arrowleft || keys.a) {
-        rotationQuaternion.setFromAxisAngle(axisY, rotateAngle)
-        playerBody.quaternion = rotationQuaternion.mult(playerBody.quaternion)
+        playerBody.velocity.x = -worldVelocity.x
     }
 
     if (keys.arrowright || keys.d) {
-        rotationQuaternion.setFromAxisAngle(axisY, -rotateAngle)
-        playerBody.quaternion = rotationQuaternion.mult(playerBody.quaternion)
+        playerBody.velocity.x = worldVelocity.x
     }
 
-    localVelocity.set(0, 0, moveDistance * 0.2);
-    const worldVelocity = playerBody.quaternion.vmult(localVelocity);
-
     if (keys.arrowup || keys.w) {
-        playerBody.velocity.x = -worldVelocity.x;
         playerBody.velocity.z = -worldVelocity.z;
     }
 
     if (keys.arrowdown || keys.s) {
-        playerBody.velocity.x = worldVelocity.x;
         playerBody.velocity.z = worldVelocity.z;
     }
+
+
 }
 
 function update() {

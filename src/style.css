@@ -24,7 +24,7 @@ canvas {
   max-width: 100%;
 }
 
-.congrats{
+.message {
   position: fixed;
   inset: 0;
   display: flex;
@@ -37,18 +37,6 @@ canvas {
   background: radial-gradient(rgba(37, 29, 65, .8), rgba(37, 29, 65, 0.01))
 }
 
-.continue {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-flow: column nowrap;
-  place-items: center;
-  place-content: center;
-  gap: 1rem;
-
-  color: #fff;
-  background: radial-gradient(rgba(90, 77, 138, 0.8), rgba(37, 29, 65, 0.01))
-}
 
 .level {
   position: fixed;

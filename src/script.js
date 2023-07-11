@@ -151,8 +151,8 @@ class MazeGame {
     }
 
     addLight() {
-        this.light = new THREE.PointLight('#ffffff', 2, 5)
-        this.light.position.set(0, 0.65, 0)
+        this.light = new THREE.AmbientLight('#fff')
+        // this.light.position.set(0, 0.65, 0)
         this.scene.add(this.light)
     }
 
@@ -296,7 +296,7 @@ class MazeGame {
                         this.mazeBody.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize - wallSize))
                     }
 
-                    // If entrance on bottom
+                    // If entrance on botddddddddtom
                     if (r == row.length - 1) {
                         this.mazeBody.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize + wallSize))
                     }
@@ -315,17 +315,17 @@ class MazeGame {
             })
         })
 
-        const texture = new THREE.TextureLoader().load('cubeMap/c_side.png')
+        const texture = new THREE.TextureLoader().load('cubeMap/c_top.png')
         const material = new THREE.MeshStandardMaterial({ map: texture })
         const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, false)
         const g = new THREE.BoxGeometry(0.5, 0.5, 0.5)
 
-        this.mazeMesh = new THREE.Mesh(geometry, materialCube)
+        this.mazeMesh = new THREE.Mesh(geometry, material)
         this.mazeMesh.castShadow = true
         this.scene.add(this.mazeMesh)
 
         this.mazeBody.position.copy(this.mazeMesh.position)
-        // this.cannon.addBody(this.mazeBody)
+        this.cannon.addBody(this.mazeBody)
     }
 
     addRenderer() {
@@ -346,7 +346,7 @@ class MazeGame {
             height: window.innerHeight,
             pixelRatio: Math.min(window.devicePixelRatio, 2)
         }
-        
+
         instance.camera.aspect = instance.sizes.width / instance.sizes.height
         instance.camera.updateProjectionMatrix()
 

@@ -22,7 +22,7 @@ class MazeGame {
     constructor() {
         instance = this
 
-        this.sizes = {
+        instance.sizes = {
             width: window.innerWidth,
             height: window.innerHeight,
             pixelRatio: Math.min(window.devicePixelRatio, 2)
@@ -318,12 +318,14 @@ class MazeGame {
         const texture = new THREE.TextureLoader().load('cubeMap/c_side.png')
         const material = new THREE.MeshStandardMaterial({ map: texture })
         const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, false)
-        this.mazeMesh = new THREE.Mesh(geometry, material)
+        const g = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+
+        this.mazeMesh = new THREE.Mesh(geometry, materialCube)
         this.mazeMesh.castShadow = true
         this.scene.add(this.mazeMesh)
 
         this.mazeBody.position.copy(this.mazeMesh.position)
-        this.cannon.addBody(this.mazeBody)
+        // this.cannon.addBody(this.mazeBody)
     }
 
     addRenderer() {
@@ -338,18 +340,18 @@ class MazeGame {
     }
 
     resize() {
-
-        this.sizes = {
+        
+        instance.sizes = {
             width: window.innerWidth,
             height: window.innerHeight,
             pixelRatio: Math.min(window.devicePixelRatio, 2)
         }
+        
+        instance.camera.aspect = instance.sizes.width / instance.sizes.height
+        instance.camera.updateProjectionMatrix()
 
-        this.camera.aspect = this.sizes.width / this.sizes.height
-        this.camera.updateProjectionMatrix()
-
-        this.renderer.setSize(this.sizes.width, this.sizes.height)
-        this.renderer.setPixelRatio(this.sizes.pixelRatio)
+        instance.renderer.setSize(instance.sizes.width, instance.sizes.height)
+        instance.renderer.setPixelRatio(instance.sizes.pixelRatio)
     }
 
     destroy() {

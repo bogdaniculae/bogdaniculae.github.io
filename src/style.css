@@ -46,3 +46,29 @@ canvas {
   color: yellow;
   font-weight: bold;
 }
+
+.game .container {
+  position: fixed;
+  inset: 0;
+
+  display: flex;
+  place-content: center;
+  place-items: center;
+}
+
+.game-popup {
+  margin-top: 20rem;
+  text-align: center;
+}
+
+.game-rounds {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  color: yellow;
+}
+
+button {
+  width: 180px;
+  height: 40px;
+}

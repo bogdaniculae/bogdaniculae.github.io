@@ -151,8 +151,8 @@ class MazeGame {
     }
 
     addLight() {
-        this.light = new THREE.AmbientLight('#fff')
-        // this.light.position.set(0, 0.65, 0)
+        this.light = new THREE.PointLight('#fff')
+        this.light.position.set(0, 0.65, 0)
         this.scene.add(this.light)
     }
 
@@ -296,7 +296,7 @@ class MazeGame {
                         this.mazeBody.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize - wallSize))
                     }
 
-                    // If entrance on botddddddddtom
+                    // If entrance on bottom
                     if (r == row.length - 1) {
                         this.mazeBody.addShape(shape, new CANNON.Vec3(c * wallSize, wallSize * 0.5, r * wallSize + wallSize))
                     }
@@ -315,10 +315,13 @@ class MazeGame {
             })
         })
 
-        const texture = new THREE.TextureLoader().load('cubeMap/c_top.png')
+        const texture = new THREE.TextureLoader().load('cubeMap/c_side.png')
         const material = new THREE.MeshStandardMaterial({ map: texture })
-        const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, false)
-        const g = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+        const geometry = BufferGeometryUtils.mergeBufferGeometries(geometries, true)
+
+        geometry.groups.forEach((face, i) => {
+            face.materialIndex = Math.floor(i % materialCube.length)
+        })
 
         this.mazeMesh = new THREE.Mesh(geometry, material)
         this.mazeMesh.castShadow = true
@@ -340,7 +343,7 @@ class MazeGame {
     }
 
     resize() {
-        
+
         instance.sizes = {
             width: window.innerWidth,
             height: window.innerHeight,
